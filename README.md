@@ -1,47 +1,51 @@
 # ZWIEGNET TK4- Distribution Mirror
 
 This repository maintains a checksum-verified GitHub Releases mirror of the
-upstream TK4- (Tur(n)key 4-) distribution for ZWIEGNET Hercules installations.
+TK4- (Tur(n)key 4-) distribution for ZWIEGNET Hercules installations.
 
 TK4- is a third-party turnkey distribution for IBM MVS 3.8j running under the
 Hercules emulator. This repository is a mirror and automation project; it does
-not claim authorship of TK4-, MVS 3.8j, Hercules, or any software bundled in
-the upstream archive.
+not claim authorship of TK4-, MVS 3.8j, Hercules, or bundled software.
 
-## What is mirrored
+## Release assets
 
-The workflow downloads the upstream `tk4-_v1.00_current.zip` archive and
-publishes the exact archive as a versioned GitHub Release asset. The archive
-is not committed to Git, keeping the repository small and making installations
-repeatable.
+Each automated release contains:
 
-Each generated release includes:
+- `tk4-_v1.00_current.zip` — validated installation archive.
+- `tk4-_v1.00_current.zip.sha256` — SHA-256 checksum.
+- `tk4-source.txt` — exact source and provenance used to build the archive.
 
-- `tk4-_v1.00_current.zip` — unmodified upstream distribution archive.
-- `tk4-_v1.00_current.zip.sha256` — SHA-256 checksum for the archive.
+The release tag contains the archive SHA-256 prefix. A new release is created
+only when the archive content changes.
 
-Release tags include the content digest, for example
-`tk4-1.00-<sha256-prefix>`. If the upstream archive changes while retaining
-the same filename, the changed content produces a new release.
+## Automatic build and update process
 
-## Automatic update schedule
+GitHub Actions checks every six hours and can also be started manually from
+**Actions → Mirror upstream TK4- → Run workflow**.
 
-GitHub Actions checks the upstream distribution every six hours. It can also
-be started manually from **Actions → Mirror upstream TK4- → Run workflow**.
+The workflow tries the official upstream HTTPS distribution endpoints first:
 
-A new GitHub Release is published only when the downloaded archive's SHA-256
-differs from the latest mirrored release. The workflow:
+1. `https://wotho.ethz.ch/tk4-/`
+2. `https://wotho.pebble-beach.ch/tk4-/`
 
-1. Downloads from the upstream primary HTTPS endpoint.
-2. Tries the documented alternate HTTPS mirror if the primary download fails.
-3. Requires normal TLS certificate verification for both endpoints.
-4. Tests the ZIP archive before publishing it.
-5. Calculates SHA-256 and compares it with the latest mirror release.
-6. Publishes a new immutable, digest-tagged release when content changes.
+Normal TLS certificate verification is required. TLS checks are never
+disabled. If both official endpoints are unavailable or return an invalid
+archive, the workflow builds a ZIP with the same TK4- directory layout from
+the public GitHub source mirror
+[`actualquak/tk4`](https://github.com/actualquak/tk4). The release's
+`tk4-source.txt` and release notes explicitly identify that fallback as a
+repacked source-mirror snapshot, not the original upstream ZIP.
 
-TLS verification is never disabled. If both upstream endpoints fail
-certificate or network validation, the workflow fails without publishing an
-unverified archive.
+Every candidate archive is tested and must contain the expected
+`conf/tk4-.cnf` configuration and `dasd/mvsres.148` system volume before
+publication. The workflow calculates SHA-256 and publishes a new immutable
+release only when the archive differs from the previous release.
+
+**Update limitation:** when both official endpoints remain unavailable, the
+fallback can only reflect changes made to the public GitHub source mirror.
+It cannot discover unpublished changes to the inaccessible official archive.
+When the official endpoint becomes available again, the workflow automatically
+returns to using the official archive.
 
 ## Using the mirror
 
@@ -51,47 +55,36 @@ reads the latest release through the GitHub Releases API, verifies the
 published SHA-256 asset digest, downloads the archive, and installs it under
 `/var/lib/hercules/tk4`.
 
-The archive is stored in the host's Hercules cache at
-`/var/lib/hercules/cache`. The role keeps all runtime paths under
+The cache is `/var/lib/hercules/cache`. Runtime data remains under
 `/var/lib/hercules`, backed by the persistent `/data/hercules` bind mount.
 
-## Upstream sources
+## Upstream sources and attribution
 
-- Primary distribution: https://wotho.ethz.ch/tk4-/
-- Alternate distribution mirror: https://wotho.pebble-beach.ch/tk4-/
+- Official primary: https://wotho.ethz.ch/tk4-/
+- Official alternate: https://wotho.pebble-beach.ch/tk4-/
+- GitHub fallback source: https://github.com/actualquak/tk4
 
-The workflow uses the upstream current archive URL. The upstream filename is
-not treated as a version identifier; content SHA-256 determines whether a new
-mirror release is required.
+The upstream TK4- distribution includes its own documentation, credits, and
+third-party license notices. Those notices must be retained. The TK4- author
+describes the distribution as public domain to the extent that third-party
+copyrights are not affected; bundled components retain their own terms.
+Consult `TK4-.CREDITS` and all included notices before redistribution.
 
-## Licensing and attribution
-
-The upstream TK4- archive contains its own documentation, credits, and
-third-party license notices. Those notices remain part of the unmodified
-archive and must be retained with it. The rights and terms for TK4-, MVS 3.8j,
-Hercules, and each bundled third-party component are determined by their
-respective authors and license documents, not by this mirror.
-
-The root `LICENSE` file applies only to original repository-authored
-automation and documentation to the extent those files are copyrightable. It
-does not relicense the upstream archive or its bundled components. Review the
-upstream credits and notices before redistributing the release assets publicly.
+The root `LICENSE` applies only to original repository-authored automation
+and documentation to the extent those files are copyrightable. It does not
+relicense TK4- or any bundled component.
 
 ## Repository contents
 
 ```text
-.github/workflows/mirror-tk4.yml   Scheduled upstream check and release publisher
+.github/workflows/mirror-tk4.yml   Scheduled source check and release publisher
 README.md                          Project and operating documentation
 LICENSE                            License for original repository-authored files
 ```
 
-## Manual verification
-
-After a release is published, verify the archive locally:
+## Verify a downloaded release
 
 ```bash
 sha256sum -c tk4-_v1.00_current.zip.sha256
 unzip -t tk4-_v1.00_current.zip
 ```
-
-The checksum file contains the digest and the exact archive filename.
