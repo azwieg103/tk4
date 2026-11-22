@@ -44,10 +44,10 @@ jobs:
             echo "Trying upstream: ${url}"
             curl --fail --location --silent --show-error \
               --retry 1 --retry-delay 2 --connect-timeout 20 --max-time 900 \
-              --proto '=https' --tlsv1.2 --output "${archive}" "${url}"
-            test -s "${archive}"
-            unzip -tq "${archive}"
-            unzip -Z1 "${archive}" | grep -Fxq 'conf/tk4-.cnf'
+              --proto '=https' --tlsv1.2 --output "${archive}" "${url}" || return 1
+            test -s "${archive}" || return 1
+            unzip -tq "${archive}" || return 1
+            unzip -Z1 "${archive}" | grep -Fxq 'conf/tk4-.cnf' || return 1
             source_description="Official upstream archive: ${url}"
           }
 
