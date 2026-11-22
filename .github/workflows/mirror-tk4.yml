@@ -85,12 +85,12 @@ jobs:
         run: |
           set -Eeuo pipefail
           archive="tk4-_v1.00_current.zip"
-          latest_tag="$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')"
+          latest_tag="$(gh release list --repo "${GITHUB_REPOSITORY}" --limit 1 --json tagName --jq '.[0].tagName // empty')"
           previous_digest=""
 
           if [[ -n "${latest_tag}" ]]; then
             mkdir -p previous
-            if gh release download "${latest_tag}" \
+            if gh release download "${latest_tag}" --repo "${GITHUB_REPOSITORY}" \
                 --pattern "${archive}.sha256" --dir previous; then
               previous_digest="$(awk 'NR==1 {print $1}' "previous/${archive}.sha256")"
             fi
@@ -121,12 +121,12 @@ jobs:
           tag="${{ steps.compare.outputs.tag }}"
           source_description="${{ steps.source.outputs.description }}"
 
-          if gh release view "${tag}" >/dev/null 2>&1; then
+          if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             echo "Release ${tag} already exists; no duplicate release created."
             exit 0
           fi
 
-          gh release create "${tag}" \
+          gh release create "${tag}" --repo "${GITHUB_REPOSITORY}" \
             "${archive}" "${archive}.sha256" "tk4-source.txt" \
             --title "TK4- 1.00 mirror ${tag#tk4-1.00-}" \
             --notes "Automated TK4- distribution mirror.
