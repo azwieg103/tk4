@@ -58,6 +58,93 @@ published SHA-256 asset digest, downloads the archive, and installs it under
 The cache is `/var/lib/hercules/cache`. Runtime data remains under
 `/var/lib/hercules`, backed by the persistent `/data/hercules` bind mount.
 
+## TK4- operating quick reference
+
+The following references are specifically useful for the MVS 3.8j TK4-
+environment:
+
+- **[TK4- User's Manual (PDF)](https://peppe8o.com/download/python/mainframe/mvs_tk4-_v1.00_users_manual.pdf)** — primary operating reference for TK4-, including TSO logon, system consoles, Hercules HTTP console input, RAKF security, user administration, and the supplied system procedures.
+- **[MVS Console Cheat Sheet](https://github.com/FuzzyMainframes/MainframeNotebook/blob/master/MVS/MVS-Console-Cheat-Sheet.md)** — concise MVS 3.8J/TK4- console command reference.
+- **[RAKF project and User's Guide](https://github.com/mvslovers/RAKF)** — RAKF security-system documentation. Check the RAKF version installed with TK4- before applying commands from newer RAKF documentation; command availability and syntax can differ.
+
+### Hercules HTTP console and MVS commands
+
+When Hercules is running in daemon mode, the Hercules HTTP server can be used
+to enter MVS console commands. The console is also useful for observing
+operator messages. Restrict access to the HTTP console (commonly TCP port
+8038) to trusted management hosts; do not expose it publicly.
+
+MVS console commands entered through the Hercules HTTP console are prefixed
+with `/`. When entered through an alternate MVS console, omit the slash.
+
+| Task | MVS console command | Notes |
+|---|---|---|
+| Cancel a TSO session | `/C U=userid` | Substitute the exact TSO user ID. This terminates that user's session; unsaved work is lost. |
+| Display online DASD devices | `/D U,DASD,ONLINE` | Displays online DASD devices. |
+| Display defined DASD devices | `/D U,DASD` | Displays defined devices and their status. |
+
+Example: to release a disconnected or stuck HERC02 TSO session, enter
+`/C U=HERC02` in the Hercules HTTP console and wait for the MVS
+`CANCEL COMMAND ACCEPTED` response before attempting to log on again.
+
+### TSO session basics
+
+- Enter `LOGOFF` at the TSO `READY` prompt to end a TSO session normally.
+- Exit RFE/RPF or other applications using their displayed exit key (often
+  PF3) before issuing `LOGOFF`.
+- A TSO user ID generally cannot have two concurrent sessions. If a terminal
+  disconnects without a clean logoff, the old session may remain active.
+  Use the MVS console cancel command above only when necessary.
+- The TK4- TSO Applications menu includes RFE/RPF, the IMON-370 system
+  monitor, the spool browser, help, utilities, and terminal testing. Use
+  option 6 for TSO help and installed utility information.
+
+### User accounts and RAKF
+
+TK4- uses RAKF (the RAcK oFf security system), a RACF-like security system.
+The stock distribution includes these initial TSO accounts:
+
+| User ID | Initial password | Intended access |
+|---|---|---|
+| `HERC01` | `CUL8TR` | Fully authorized; access to RAKF users and profiles tables |
+| `HERC02` | `CUL8TR` | Fully authorized; no access to RAKF users and profiles tables |
+| `HERC03` | `PASS4U` | Regular user |
+| `HERC04` | `PASS4U` | Regular user |
+| `IBMUSER` | `IBMPASS` | Recovery account |
+
+These are distribution defaults. Change default passwords and restrict
+network access before using the system beyond a trusted lab environment.
+
+**Creating a TSO user requires two steps:**
+
+1. Define the user in the TK4- RAKF users table and activate the updated
+   table at an MVS console with `S RAKFUSER`.
+2. Define the user's TSO attributes in UADS. The TK4- manual recommends
+   submitting the supplied `SYS2.JCLLIB(ADDUSER)` job after the RAKF
+   definition is in place.
+
+The RAKF user table and UADS are separate: a RAKF definition alone does not
+automatically grant TSO logon capability. Follow the TK4- User's Manual's
+**User Management** and **RAKF Administration** sections for the exact
+procedure and dataset format on this distribution. Do not assume that
+commands documented for newer RAKF releases (for example, `LISTUSER`,
+`ADDUSER`, or `ALTUSER`) are available in the TK4- release installed on
+your system. Likewise, inspect the actual catalog entries and dataset
+organization before attempting to browse or edit a security dataset.
+
+### Persistent mainframe data
+
+For the ZWIEGNET Ansible deployment, persistent Hercules/TK4- files are
+stored under `/data/hercules` and exposed to the service at
+`/var/lib/hercules` through a bind mount. The emulated DASD files under
+`/data/hercules/tk4/dasd/` contain the guest's persistent MVS volumes,
+including system datasets, catalogs, security data, and user datasets.
+
+Back up the DASD files with Hercules stopped to obtain a consistent
+filesystem-level backup. Do not edit DASD image files directly to change
+MVS users, passwords, or datasets; use the guest operating system's
+supported utilities and procedures.
+
 ## Upstream sources and attribution
 
 - Official primary: https://wotho.ethz.ch/tk4-/
@@ -78,7 +165,7 @@ relicense TK4- or any bundled component.
 
 ```text
 .github/workflows/mirror-tk4.yml   Scheduled source check and release publisher
-README.md                          Project and operating documentation
+README.md                          Project, operating, and quick-reference documentation
 LICENSE                            License for original repository-authored files
 ```
 
