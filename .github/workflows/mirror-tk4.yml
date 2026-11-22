@@ -1,6 +1,11 @@
 name: Mirror upstream TK4-
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/mirror-tk4.yml
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
@@ -49,7 +54,7 @@ jobs:
           digest="$(sha256sum "${archive}" | awk '{print $1}')"
           echo "sha256=${digest}" >> "$GITHUB_OUTPUT"
         id: source
-       
+
       - name: Compare with latest mirrored release
         id: compare
         env:
