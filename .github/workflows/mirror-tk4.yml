@@ -19,41 +19,63 @@ concurrency:
 
 jobs:
   mirror:
-    name: Check upstream archive and publish if changed
+    name: Build and publish TK4- release
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
-      - name: Install download and archive tools
+      - name: Install archive tools
         run: |
           sudo apt-get update
-          sudo apt-get install --yes curl unzip
+          sudo apt-get install --yes curl unzip zip
 
-      - name: Download upstream TK4- archive
+      - name: Obtain TK4- distribution
+        id: source
         shell: bash
         run: |
           set -Eeuo pipefail
           archive="tk4-_v1.00_current.zip"
+          source_file="tk4-source.txt"
           primary="https://wotho.ethz.ch/tk4-/${archive}"
           alternate="https://wotho.pebble-beach.ch/tk4-/${archive}"
+          source_description=""
 
-          if curl --fail --location --silent --show-error \
-              --retry 2 --retry-delay 3 --connect-timeout 20 --max-time 900 \
-              --proto '=https' --tlsv1.2 --output "${archive}" "${primary}"; then
-            echo "Downloaded from primary upstream."
-          else
-            echo "Primary download failed; trying alternate HTTPS mirror."
-            rm -f "${archive}"
+          download_upstream() {
+            local url="$1"
+            echo "Trying upstream: ${url}"
             curl --fail --location --silent --show-error \
-              --retry 2 --retry-delay 3 --connect-timeout 20 --max-time 900 \
-              --proto '=https' --tlsv1.2 --output "${archive}" "${alternate}"
+              --retry 1 --retry-delay 2 --connect-timeout 20 --max-time 900 \
+              --proto '=https' --tlsv1.2 --output "${archive}" "${url}"
+            test -s "${archive}"
+            unzip -tq "${archive}"
+            unzip -Z1 "${archive}" | grep -Fxq 'conf/tk4-.cnf'
+            source_description="Official upstream archive: ${url}"
+          }
+
+          if ! download_upstream "${primary}"; then
+            echo "Primary upstream unavailable or invalid; trying alternate."
+            rm -f "${archive}"
+            if ! download_upstream "${alternate}"; then
+              echo "Both official endpoints failed. Building the same TK4- directory layout from the public GitHub source mirror."
+              rm -f "${archive}"
+              rm -rf mirror
+              git clone --depth 1 https://github.com/actualquak/tk4.git mirror
+              mirror_commit="$(git -C mirror rev-parse HEAD)"
+              test -s "mirror/conf/tk4-.cnf"
+              test -s "mirror/dasd/mvsres.148"
+              git -C mirror archive --format=zip --output="${GITHUB_WORKSPACE}/${archive}" HEAD
+              source_description="Repacked from public GitHub source mirror https://github.com/actualquak/tk4 at commit ${mirror_commit}. This is a source-mirror snapshot, not the original upstream ZIP."
+            fi
           fi
 
           test -s "${archive}"
           unzip -tq "${archive}"
+          unzip -Z1 "${archive}" | grep -Fxq 'conf/tk4-.cnf'
+          unzip -Z1 "${archive}" | grep -Fxq 'dasd/mvsres.148'
+          printf '%s\n' "${source_description}" > "${source_file}"
           sha256sum "${archive}" > "${archive}.sha256"
           digest="$(sha256sum "${archive}" | awk '{print $1}')"
+          echo "description=${source_description}" >> "$GITHUB_OUTPUT"
           echo "sha256=${digest}" >> "$GITHUB_OUTPUT"
-        id: source
 
       - name: Compare with latest mirrored release
         id: compare
@@ -97,6 +119,7 @@ jobs:
           set -Eeuo pipefail
           archive="tk4-_v1.00_current.zip"
           tag="${{ steps.compare.outputs.tag }}"
+          source_description="${{ steps.source.outputs.description }}"
 
           if gh release view "${tag}" >/dev/null 2>&1; then
             echo "Release ${tag} already exists; no duplicate release created."
@@ -104,13 +127,14 @@ jobs:
           fi
 
           gh release create "${tag}" \
-            "${archive}" "${archive}.sha256" \
+            "${archive}" "${archive}.sha256" "tk4-source.txt" \
             --title "TK4- 1.00 mirror ${tag#tk4-1.00-}" \
-            --notes "Unmodified upstream TK4- current distribution archive.
+            --notes "Automated TK4- distribution mirror.
 
-          Source: https://wotho.ethz.ch/tk4-/
-          Alternate source: https://wotho.pebble-beach.ch/tk4-/
+          Source: ${source_description}
 
-          This release is content-addressed. The SHA-256 checksum is included
-          as a separate asset. Upstream archive and bundled components retain
-          their own authorship, credits, and license terms."
+          The ZIP is validated before publication. SHA-256 is provided as a
+          separate asset. If the official HTTPS distribution endpoints are
+          unavailable, the workflow uses the public GitHub source mirror and
+          labels that provenance explicitly. Bundled software retains its
+          original authorship, credits, and license terms."
